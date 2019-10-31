@@ -1,0 +1,42 @@
+version: '3'
+services:
+  jenkins:
+    container_name: jenkins
+    image: jenkins/jenkins
+    ports:
+      - "8080:8080"
+    volumes:
+      - $PWD/jenkins_home:/var/jenkins_home # this will replicate the data from the container folder "/var/jenkins_home" to the server "$PWD/jenkins_home"
+    networks:
+      - net
+    restart: always # this will automatically restore the "jenkins" container when its rebooted
+# when we do "docker-compose" build, this will look for the build context and look for the Dockerfile created and will execute
+  remote_host:
+    container_name: remote-host 
+    image: remote-host # this is our own custom image
+    build:
+      context: centos7 # this is the folder where the Dockerfile is in
+    volumes:
+      - $PWD/aws-s3.sh:/tmp/script.sh # this will execture a shell script
+    networks:
+      - net
+    restart: always
+  db_host:
+    container_name: db
+    image: mysql:5.7
+    environment:
+      - "MYSQL_ROOT_PASSWORD=1234"
+    volumes:
+      - $PWD/db_data:/var/lib/mysql
+    networks:
+      - net
+networks:
+  net:
+# by the end of this, this will just create an image
+# after the image is created, then we still need to create the container
+# by running "docker-compose up -d", this will run what is left here
+# and that the "remote_host_ services and then this will create the container
+
+# the "services" in this file will create a local DNS that will let other
+# container communicate to each other
+  

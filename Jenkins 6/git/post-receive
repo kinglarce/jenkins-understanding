@@ -1,0 +1,34 @@
+#!/bin/bash
+
+
+# Get branch name from ref head
+# this file is for gitlab hooks(CI), if ever somebody pushes to master then it will generate a crumb and that crumb
+# will be use for POST request to jenkins that will trigger the "Build"
+# To actually trigger the hooks to a specific repositories(only in gitlab) or in this case nodejs repor, we need to go to 
+# "/var/opt/gitlab/git-data/repositories/jenkins/nodejs.git" which is located in the "git-server" container then create
+# a directory called "custom_hooks", and in that dir, add this file "post-receive" and gitlab would already know this hooks.
+# NOTE: make sure this "custom_hooks" and "post-receive" file mode is executable and the user is not "root"
+# If everything is right, then this will trigger the "node-express-realworld-example-app" job automatically using crumb POST req
+
+# The condition here is to check whenever someone pushes to branch
+if ! [ -t 0 ]; then
+  read -a ref
+fi
+IFS='/' read -ra REF <<< "${ref[2]}"
+branch="${REF[2]}"
+
+# if the branch is master
+if [ "$branch" == "master" ]; then
+# then get the crumb id and assign it to crumb
+crumb=$(curl -u "jenkins_user:jenkins_user" -s 'http://192.168.1.22:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)')
+# and then trigger the job "node-express-realworld-example-app" using POST request with header of the crumb id
+curl -u "jenkins_user:jenkins_user" -H "$crumb" -X POST http://192.168.1.22:8080/job/node-express-realworld-example-app/build?delay=0sec
+# Below is for trigger job with parameters
+# curl -u "jenkins_user:jenkins_user" -H "$crumb" -X POST http://192.168.1.22:8080/job/pipeline-docker-maven/buildWithParameters?BUILD_TAG=10
+
+if [ $? -eq 0 ] ; then
+    echo "*** Ok"
+  else
+    echo "*** Error"
+  fi
+fi

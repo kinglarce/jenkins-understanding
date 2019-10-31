@@ -1,0 +1,108 @@
+version: '3'
+services:
+  # Part 1 - Setting up Jenkins
+  # jenkins: # this service are also host, and it's being using as a "host" when we're doing SSH or copying files to a container
+  #   container_name: jenkins
+  #   image: jenkins/jenkins 
+  #   ports:
+  #     - "8080:8080"
+  #   volumes: # volume is useful to persist data to the local machine so that even though the container is down/deleted then the data is still saved
+  #     - $PWD/jenkins_home:/var/jenkins_home # this will replicate the data from the container folder "/var/jenkins_home" to the server "$PWD/jenkins_home"
+  #   networks:
+  #     - net
+  #   restart: always # this will automatically restore the "jenkins" container when its rebooted
+  # Part 4 - The jenkins container is now with ansible
+  # jenkins:
+  #   container_name: jenkins
+  #   # here we telling docker instead of just using "jenkins/jenkins", we want it to use our customize Dockerfile from the "context" which is "jenkins-ansible" folder
+  #   image: jenkins-ansible 
+  #   build:
+  #     # context means the directory we're we have a Dockerfile where it currently lives and we want to use that
+  #     context: jenkins-ansible     
+  #   ports:
+  #     - "8080:8080" # left side before the colon(:) is the external and the right side is the internal port
+  #   volumes:
+  #     - $PWD/jenkins_home:/var/jenkins_home
+  #   networks:
+  #     - net
+  #   restart: always 
+  # Part 9 - Final - We're creating a new image instead of just jenkins-ansible/Dockerfile, it's gonna be the 
+  # new jenkins-pipeline/Dockerfile
+  jenkins:
+    container_name: jenkins
+    image: jenkins/docker
+    build:
+      context: jenkins-pipeline # This is the new context or location of Dockerfile that'll be use for building the image
+    ports:
+      - "8080:8080"
+    volumes:
+      - "$PWD/jenkins_home:/var/jenkins_home"
+      # This "sock" file is launch by docker. We want to map the "docker.sock" outside of "jenkins" container and 
+      # map it inside of this "jenkins" container with same location, So that whenever we type docker command inside
+      # of this container "jenkins" this sock is going to answer by executing the docker installed outside of this 
+      # container. In short the docker command it's using is not inside this container, it outside.
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - net
+  # Part 2 & 3 - Setting up Remote Server with SSH and controlling "db_host" for grabbing database and setting backup to S3 bucket
+  # when we do "docker-compose" build, this will look for the build context and look for the Dockerfile created and will execute
+  remote_host: 
+    container_name: remote-host 
+    image: remote-host # this is our own custom image
+    build:
+      context: centos7 # this is the folder where the Dockerfile is in 
+    volumes:
+      - $PWD/aws-s3.sh:/tmp/db_backup.sh # this will persist the shell script for backing db from "remote-host" and uploading is to "s3 bucket"
+      # the "/tmp/db_backup.sh" is the one being executed in Jenkins when we execute shell script on remote host using ssh
+      # remember to always set executable permission if persisting a file from host to container(eg chmod +x aws-s3.sh)
+    networks:
+      - net
+    restart: always
+  # Part 3 - Setting up Database server and will be controlled by "remote_host" to execute mysql commands
+  db_host:
+    container_name: db
+    image: mysql:5.7 # this will grab the mysql image from docker
+    environment:
+      - "MYSQL_ROOT_PASSWORD=1234" # to provide password, we need to create an environment variable "MYSQL_ROOT_PASSWORD", this is special variable for docker
+    volumes:
+      - $PWD/db_data:/var/lib/mysql # "/var/lib/mysql" is where the default data lived in the container and we gonna replicate it in "db_data" directory in our local machine
+    networks:
+      - net
+    restart: always
+  # Part 4
+  web:
+    container_name: web
+    image: ansible-web # custom image name
+    build:
+      context: jenkins-ansible/web # locate the web folder where it has the Dockerfile
+    ports:
+      - "80:80" # expose port so that it can connect to nginx expose port
+    networks:
+      - net
+    restart: always
+  # Part 6(no changes for Part 5) - This is for running a gitlab server
+  # This service is run separately on other machine(my other laptop) because it's so heavy
+  # git:
+  #   container_name: git-server
+  #   image: 'gitlab/gitlab-ce:latest'
+  #   hostname: 'gitlab.example.com'
+  #   ports:
+  #     - '8090:80'
+  #   volumes:
+  #     - '/srv/gitlab/config:/etc/gitlab'
+  #     - '/srv/gitlab/logs:/var/log/gitlab'
+  #     - '/srv/gitlab/data:/var/opt/gitlab'
+  #   networks:
+  #     - net
+networks:
+  net:
+# by the end of this, this will just create an image
+# after the image is created, then we still need to create the container
+# by running "docker-compose up -d", this will run what is left here
+# and that the "remote_host_ services and then this will create the container
+
+# the "services" in this file will create a local DNS that will let other
+# container communicate to each other
+
+# we gonna run in the "remote-host" then its gonna connect to "db" container and extract the data from there
+  
